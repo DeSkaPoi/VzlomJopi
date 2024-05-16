@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace VzlomJopi
 {
-    public class CsvModel
+    public class TestCsvModel
     {
         public string Question { get; set; }
         public string Answer { get; set; }

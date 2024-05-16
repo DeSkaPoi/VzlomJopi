@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using Tesseract;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace VzlomJopi
 {
@@ -35,7 +36,7 @@ namespace VzlomJopi
             }
         }
 
-        public static byte[] ToByteArray(Image image, System.Drawing.Imaging.ImageFormat format)
+        public static byte[] ToByteArray(System.Drawing.Image image, System.Drawing.Imaging.ImageFormat format)
         {
             using (MemoryStream ms = new MemoryStream())
             {
@@ -44,18 +45,24 @@ namespace VzlomJopi
             }
         }
 
+        private static List<TestCsvModel> _tests = new();
+
         public Form1()
         {
             InitializeComponent();
+            _tests = GetModelFromCsv<TestCsvModel>(Environment.CurrentDirectory + "\\test.csv");
         }
 
         private void button1_Click(object sender, EventArgs e)
         {
-            var child1 = FindWindow("TMainForm", null);
-            IntPtr child3 = FindWindowExA(child1, new IntPtr(0), "TRichView", null);
+            IntPtr tTester = FindWindow("TMainForm", null);
+            IntPtr tTesterTRichView = FindWindowExA(tTester, new IntPtr(0), "TRichView", null);
+
+            if(tTesterTRichView == IntPtr.Zero)
+                System.Windows.Forms.Application.Exit();
 
             RECT rct;
-            GetWindowRect(child3, out rct);
+            GetWindowRect(tTesterTRichView, out rct);
             int rWidth = rct.right - rct.left;
             int rHeight = rct.bottom - rct.top;
 
@@ -64,14 +71,71 @@ namespace VzlomJopi
             GH.CopyFromScreen(rct.left, rct.top, 0, 0, BM.Size);
             //BM.Save("img.png", System.Drawing.Imaging.ImageFormat.Png);
 
-            var ocrengine = new TesseractEngine(Environment.CurrentDirectory, "rus", EngineMode.Default);
-            var byteImage = ToByteArray(BM as Image, System.Drawing.Imaging.ImageFormat.Bmp);
-            var img = Pix.LoadFromMemory(byteImage);
-            var res = ocrengine.Process(img);
+            TesseractEngine ocrengine = new TesseractEngine(Environment.CurrentDirectory, "rus", EngineMode.Default);
+            byte[] byteImage = ToByteArray(BM, System.Drawing.Imaging.ImageFormat.Bmp);
+            Pix img = Pix.LoadFromMemory(byteImage);
+            Page res = ocrengine.Process(img);
+            
+            string questionInTtester = res.GetText();
+            int minCountOfEdit = int.MaxValue;
+            TestCsvModel foundTest = null;
+            foreach (TestCsvModel test in _tests)
+            {
+                int countOfEdit = CountOfEditsInString(test.Question, questionInTtester);
+                if (countOfEdit < minCountOfEdit)
+                {
+                    minCountOfEdit = countOfEdit;
+                    foundTest = test;
+                }
+            }
 
-            richTextBox1.Text = res.GetText();
+            Form2 dlg1 = new Form2(foundTest != null ? foundTest.Answer : "Вопрос не распознан. Удачи)");
+            dlg1.ShowDialog();
+        }
 
-            GetModelFromCsv<CsvModel>(Environment.CurrentDirectory + "\\test.csv");
+        private int CountOfEditsInString(string s, string t)
+        {
+            int n = s.Length;
+            int m = t.Length;
+            int[,] d = new int[n + 1, m + 1];
+
+            // Step 1
+            if (n == 0)
+            {
+                return m;
+            }
+
+            if (m == 0)
+            {
+                return n;
+            }
+
+            // Step 2
+            for (int i = 0; i <= n; d[i, 0] = i++)
+            {
+            }
+
+            for (int j = 0; j <= m; d[0, j] = j++)
+            {
+            }
+
+            // Step 3
+            for (int i = 1; i <= n; i++)
+            {
+                //Step 4
+                for (int j = 1; j <= m; j++)
+                {
+                    // Step 5
+                    int cost = (t[j - 1] == s[i - 1]) ? 0 : 1;
+
+                    // Step 6
+                    d[i, j] = Math.Min(
+                        Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1),
+                        d[i - 1, j - 1] + cost);
+                }
+            }
+            // Step 7
+            return d[n, m];
         }
 
         private List<TModel> GetModelFromCsv<TModel>(string path)
